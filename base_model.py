@@ -29,8 +29,8 @@ class Model:
     def run_train_step(self, feed_dict):
         with self._sess.graph.as_default():
             ops = [self.loss_op, self.optimizer_op]
-            op_result = self._sess.run([ops], feed_dict=feed_dict)
-            return op_result[0][0]
+            op_result = self._sess.run(ops, feed_dict=feed_dict)
+            return op_result[0]
 
     def inference(self, feed_dict):
         with self._sess.graph.as_default():
