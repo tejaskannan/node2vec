@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
-from os.path import exists
-from os import mkdir
+import gzip
+import pickle
 from constants import *
 
 
@@ -48,16 +48,12 @@ class Model:
 
         self.optimizer_op = self.optimizer.apply_gradients(pruned_gradients)
 
-    def save(self):
-        out_folder = self.params['output_folder']
-        if not exists(out_folder):
-            mkdir(save_folder)
-
-        params_path = out_folder + '/params.pkl.gz'
+    def save(self, save_folder):
+        params_path = save_folder + 'params.pkl.gz'
         with gzip.GzipFile(params_path, 'wb') as out_file:
             pickle.dump(self.params, out_file)
 
-        model_path = out_folder + '/model-' + self.name + '.ckpt'
+        model_path = save_folder + 'model-' + self.name + '.ckpt'
         with self._sess.graph.as_default():
             saver = tf.train.Saver()
             saver.save(self._sess, model_path)

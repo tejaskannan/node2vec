@@ -4,10 +4,13 @@ import tensorflow as tf
 import numpy as np
 from embedding_model import EmbeddingModel
 from utils import load_params, create_nodes_tensor, create_random_walks
-from utils import create_mini_batches
+from utils import create_mini_batches, cluster_edges, cluster_nodes
 from load import load_to_networkx
 from os.path import exists
+from os import mkdir
 from constants import *
+from datetime import datetime
+from plot import plot_graph
 
 
 def main():
@@ -36,17 +39,20 @@ def main():
     # Create placeholders
     with model._sess.graph.as_default():
         nodes_ph = tf.placeholder(tf.int32, shape=[None], name='nodes-ph')
-        walks_ph = tf.placeholder(tf.int32, shape=[None, params['num_walks'], params['walk_length']],
+        walks_ph = tf.placeholder(tf.int32, shape=[None, params['walk_length']],
                                   name='walks-ph')
 
     model.build(nodes=nodes_ph, walks=walks_ph, num_nodes=graph.number_of_nodes())
     model.init()
 
-    walks = create_random_walks(graph=graph,
+    walks = []
+    for _ in range(params['num_walks']):
+        walks.append(create_random_walks(graph=graph,
                                 length=params['walk_length'],
                                 num_walks=params['num_walks'],
                                 p=params['p'],
-                                q=params['q'])
+                                q=params['q']))
+
     nodes = create_nodes_tensor(graph=graph)
 
     convergence_count = 0
@@ -65,7 +71,7 @@ def main():
                 walks_ph: walk_batch
             }
             loss = model.run_train_step(feed_dict)
-            losses.append(loss)
+            losses.append(loss / float(len(walk_batch)))
 
         avg_loss = np.average(losses)
         print('Average loss for epoch {0}: {1}'.format(epoch, avg_loss))
@@ -78,7 +84,26 @@ def main():
             print('Early Stopping.')
             break
 
+    # Save Model
+    timestamp = datetime.now().strftime("%m-%d-%Y-%H-%M-%S")
+    output_folder = params['output_folder'] + params['graph_name'] + '-' + timestamp + '/'
+    mkdir(output_folder)
+    model.save(output_folder)
 
+    # Compute embeddings
+    feed_dict = {
+        nodes_ph: nodes
+    }
+    node_embeddings, edge_embeddings = model.inference(feed_dict)
+    # clustered_graph = cluster_edges(graph, edge_embeddings, params['num_clusters'])
+    clustered_graph = cluster_nodes(graph, node_embeddings, params['num_clusters'])
+
+    output_file = output_folder + params['graph_name'] + '.png'
+    plot_graph(clustered_graph, params['num_clusters'], output_file)
+
+    # Write output graph to Graph XML
+    output_file = output_folder + params['graph_name'] + '.gexf'
+    nx.write_gexf(clustered_graph, output_file)
 
 
 if __name__ == '__main__':
