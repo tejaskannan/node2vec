@@ -69,3 +69,7 @@ class Model:
         with self._sess.graph.as_default():
             saver = tf.train.Saver()
             saver.restore(self._sess, model_path)
+
+    def create_placeholder(self, dtype, shape, name):
+        with self._sess.graph.as_default():
+            return tf.placeholder(dtype, shape=shape, name=name)

@@ -6,49 +6,6 @@ from constants import *
 from sklearn.cluster import KMeans
 
 
-def create_random_walks(graph, num_walks, length, p, q):
-    walks = []
-    for node in graph.nodes():
-
-        t = node
-        v = node
-        walk = []
-
-        while len(walk) < length:
-
-            walk.append(v)
-
-            # Compute weights for each neighbor x of v
-            neighbor_weights = []
-            for x in graph.neighbors(v):
-                weight = 1.0 / (graph[v][x]['free_flow_time'] + SMALL_NUMBER)
-                if x == t:
-                    weight *= (1.0 / p)
-                elif t in graph[x] or x in graph[t]:
-                    weight *= 1.0
-                else:
-                    weight *= (1.0 / q)
-                neighbor_weights.append(weight)
-
-            # Normalize the weights
-            neighbor_weights = np.array(neighbor_weights) / (np.sum(neighbor_weights) + SMALL_NUMBER)
-
-            # Move the previous pointer to the current node after the first iteration
-            if len(walk) > 0:
-                t = v
-
-            # Select the next node
-            if abs(1.0 - np.sum(neighbor_weights)) < 1e-3:
-                v = np.random.choice(list(graph.neighbors(v)), p=neighbor_weights)
-
-        walks.append(walk)
-    return np.array(walks)
-
-
-def create_nodes_tensor(graph):
-    return np.array(graph.nodes())
-
-
 def create_mini_batches(walks, nodes, batch_size):
     walks_batches = []
     nodes_batches = []
