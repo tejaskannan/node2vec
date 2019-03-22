@@ -1,6 +1,7 @@
 import networkx as nx
 import numpy as np
 import json
+import csv
 from constants import *
 from sklearn.cluster import KMeans
 
@@ -97,3 +98,9 @@ def cluster_nodes(graph, node_embeddings, num_clusters):
     for label, node in zip(node_labels, graph.nodes()):
         graph.add_node(node, cluster=int(label))
     return graph
+
+
+def append_to_log(row, log_path):
+    with open(log_path, 'a') as log_file:
+        csv_writer = csv.writer(log_file, delimiter=',', quotechar='|')
+        csv_writer.writerow(row)

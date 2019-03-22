@@ -5,6 +5,7 @@ import numpy as np
 from embedding_model import EmbeddingModel
 from utils import load_params, create_nodes_tensor, create_random_walks
 from utils import create_mini_batches, cluster_edges, cluster_nodes
+from utils import append_to_log
 from load import load_to_networkx
 from os.path import exists
 from os import mkdir
@@ -34,6 +35,8 @@ def main():
     # Load graph
     graph = load_to_networkx(graph_path)
 
+    # Intialize model object. This is done before creating placeholders
+    # to ensure the placeholders are on the same tensorflow graph.
     model = EmbeddingModel(params=params)
 
     # Create placeholders
@@ -42,9 +45,11 @@ def main():
         walks_ph = tf.placeholder(tf.int32, shape=[None, params['walk_length']],
                                   name='walks-ph')
 
+    # Build embedding model
     model.build(nodes=nodes_ph, walks=walks_ph, num_nodes=graph.number_of_nodes())
     model.init()
 
+    # Create input data
     walks = []
     for _ in range(params['num_walks']):
         walks.append(create_random_walks(graph=graph,
@@ -54,6 +59,15 @@ def main():
                                 q=params['q']))
 
     nodes = create_nodes_tensor(graph=graph)
+
+    # Make output folder
+    timestamp = datetime.now().strftime("%m-%d-%Y-%H-%M-%S")
+    output_folder = params['output_folder'] + params['graph_name'] + '-' + timestamp + '/'
+    log_path = output_folder + 'log.csv'
+    mkdir(output_folder)
+
+    # Append heading to the log file
+    append_to_log(['Epoch', 'Average Loss per Sample'], log_path)
 
     convergence_count = 0
     prev_loss = BIG_NUMBER
@@ -76,6 +90,8 @@ def main():
         avg_loss = np.average(losses)
         print('Average loss for epoch {0}: {1}'.format(epoch, avg_loss))
 
+        append_to_log([epoch, avg_loss], log_path)
+
         if abs(prev_loss - avg_loss) < SMALL_NUMBER:
             convergence_count += 1
 
@@ -85,9 +101,6 @@ def main():
             break
 
     # Save Model
-    timestamp = datetime.now().strftime("%m-%d-%Y-%H-%M-%S")
-    output_folder = params['output_folder'] + params['graph_name'] + '-' + timestamp + '/'
-    mkdir(output_folder)
     model.save(output_folder)
 
     # Compute embeddings
