@@ -36,13 +36,15 @@ def main():
     # Create placeholders
     with model._sess.graph.as_default():
         nodes_ph = tf.placeholder(tf.int32, shape=[None], name='nodes-ph')
-        walks_ph = tf.placeholder(tf.int32, shape=[None, params['walk_length']], name='walks-ph')
+        walks_ph = tf.placeholder(tf.int32, shape=[None, params['num_walks'], params['walk_length']],
+                                  name='walks-ph')
 
     model.build(nodes=nodes_ph, walks=walks_ph, num_nodes=graph.number_of_nodes())
     model.init()
 
     walks = create_random_walks(graph=graph,
                                 length=params['walk_length'],
+                                num_walks=params['num_walks'],
                                 p=params['p'],
                                 q=params['q'])
     nodes = create_nodes_tensor(graph=graph)

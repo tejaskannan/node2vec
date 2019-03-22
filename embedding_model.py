@@ -14,7 +14,7 @@ class EmbeddingModel(Model):
         # Tensor of integers representing node indices (B, )
         nodes = kwargs['nodes']
 
-        # Walks is a placeholder holding the set of walks (B x L)
+        # Walks is a placeholder holding the set of walks (B x R x L)
         walks = kwargs['walks']
 
         # Number of nodes in the graph
@@ -29,15 +29,17 @@ class EmbeddingModel(Model):
                 # Tensor Dims: B x D where D is the embedding size
                 node_embeddings = tf.nn.embedding_lookup(node_embedding_var, nodes, name='node-embeddings')
 
-                # Tensor Dims: B x L x D
+                # Tensor Dims: B x R x L x D
                 walk_embeddings = tf.nn.embedding_lookup(node_embedding_var, walks, name='walk-embeddings')
+                print(walk_embeddings)
 
-                # Tensor Dims: B x L x D
-                node_expanded = tf.expand_dims(node_embeddings, axis=2)
-                walk_multiply = node_expanded * tf.transpose(walk_embeddings, [0, 2, 1])
+                # Tensor Dims: B x R x L x D
+                node_shape = tf.shape(node_embeddings)
+                node_expanded = tf.reshape(node_embeddings, [node_shape[0], 1, 1, node_shape[1]])
+                walk_multiply = node_expanded * walk_embeddings
 
                 # Tensor Dims: B x 1
-                neigh_sum = tf.reduce_sum(walk_multiply, axis=[1, 2])
+                neigh_sum = tf.reduce_sum(walk_multiply, axis=[1, 2, 3])
 
                 self.loss_op = tf.reduce_sum(neigh_sum)
                 self.output_ops.append(node_embeddings)

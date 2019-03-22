@@ -1,13 +1,14 @@
 {
     "learning_rate": 0.001,
     "gradient_clip": 5,
-    "batch_size": 16,
+    "batch_size": 32,
     "epochs": 1,
     "threshold": 1e-5,
     "patience": 5,
     "embedding_size": 16,
     "p": 1.0,
     "q": 2.0,
+    "num_walks": 5,
     "walk_length": 10,
     "output_folder": "trained_models/graph-network",
     "graph_name": "anaheim"
