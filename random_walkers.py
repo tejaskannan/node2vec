@@ -130,9 +130,13 @@ class Struc2VecWalker(RandomWalker):
         for k in range(1, self.k_max + 1):
             for node in graph.nodes():
                 prev = neighborhoods[node][k-1]
-                neighbors = []
+                neighbors = set()
                 for n in prev:
-                    neighbors += list(graph.neighbors(n))
+                    neighbors.update(set(graph.neighbors(n)))
+
+                if node in neighbors:
+                    neighbors.remove(node)
+
                 neighborhoods[node][k] = neighbors
 
         degree_neighborhoods = {node: {} for node in graph.nodes()}
