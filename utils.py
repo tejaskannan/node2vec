@@ -6,21 +6,19 @@ from constants import *
 from sklearn.cluster import KMeans
 
 
-def create_mini_batches(walks, nodes, batch_size):
+def create_mini_batches(walks, batch_size):
+
+    # Randomly shuffle data points
+    np.random.shuffle(walks)
+
     walks_batches = []
     nodes_batches = []
-    for walk in walks:
-        # Randomly shuffle data points
-        combined = list(zip(walk, nodes))
-        np.random.shuffle(combined)
-        w, n = zip(*combined)
-
-        for i in range(0, len(w), batch_size):
-            walks_batches.append(np.array(w[i:i+batch_size]))
-            nodes_batches.append(np.array(n[i:i+batch_size]))
+    for i in range(0, len(walks), batch_size):
+        walks_batches.append(np.array(walks[i:i+batch_size]))
+        nodes_batches.append(np.array([w[0] for w in walks[i:i+batch_size]]))
     return {
-        WALKS: walks_batches,
-        NODES: nodes_batches
+        WALKS: np.array(walks_batches),
+        NODES: np.array(nodes_batches)
     }
 
 
@@ -61,3 +59,18 @@ def append_to_log(row, log_path):
     with open(log_path, 'a') as log_file:
         csv_writer = csv.writer(log_file, delimiter=',', quotechar='|')
         csv_writer.writerow(row)
+
+
+def dist(a, b):
+    degree_dist = (float(max(a[0], b[0])) / (min(a[0], b[0]) + SMALL_NUMBER)) - 1
+    return degree_dist * max(a[1], b[1])
+
+
+def compressed_degree_list(graph, nodes):
+    degree_dict = {}
+    for node in nodes:
+        deg = graph.degree(node)
+        if not deg in degree_dict:
+            degree_dict[deg] = 0
+        degree_dict[deg] += 1
+    return [(d, count) for d, count in degree_dict.items()]

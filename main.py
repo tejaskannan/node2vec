@@ -1,4 +1,5 @@
 import argparse
+import networkx as nx
 from utils import load_params
 from load import load_to_networkx
 from os.path import exists
@@ -24,7 +25,8 @@ def main():
         return
     
     # Load graph
-    graph = load_to_networkx(graph_path)
+    # graph = load_to_networkx(graph_path)
+    graph = nx.barbell_graph(6, 5)
 
     # Train and test the embedding model
     embedder = GraphEmbedder(graph, params)

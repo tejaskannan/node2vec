@@ -4,16 +4,16 @@
     "batch_size": 128,
     "epochs": 2000,
     "threshold": 1e-5,
-    "patience": 5,
-    "embedding_size": 4,
+    "patience": 10,
+    "embedding_size": 16,
     "output_folder": "trained_models/",
     "graph_name": "sioux-falls",
-    "num_clusters": 3,
-    "walker_type": "node2vec",
+    "num_clusters": 5,
+    "walker_type": "struc2vec",
     "num_walks": 20,
     "walk_length": 5,
     "walker_options": {
-        "p": 1.0,
-        "q": 2.0
+        "k_max": 5,
+        "q": 0.6
     }
 }

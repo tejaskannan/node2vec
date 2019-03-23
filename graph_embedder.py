@@ -24,15 +24,9 @@ class GraphEmbedder:
             raise ValueError('Could not find the random walker named {0}.'.format(params['walker_type']))
 
         # Execute random walks
-        self.walks = []
-        for _ in range(params['num_walks']):
-            walk = random_walker.generate_walks(graph=graph,
-                                                walk_length=params['walk_length'],
-                                                num_walks=params['num_walks'])
-            self.walks.append(walk)
-
-        # Create nodes tensor
-        self.nodes = np.array(graph.nodes())
+        self.walks = random_walker.generate_walks(graph=graph,
+                                                  walk_length=params['walk_length'],
+                                                  num_walks=params['num_walks'])
 
         # Create and initialize embedding model
         self.model = EmbeddingModel(params=params)
@@ -58,7 +52,6 @@ class GraphEmbedder:
 
             # Create data batches
             batches = create_mini_batches(walks=self.walks,
-                                          nodes=self.nodes,
                                           batch_size=self.params['batch_size'])
             walk_batches = batches[WALKS]
             node_batches = batches[NODES]
@@ -91,7 +84,7 @@ class GraphEmbedder:
     def compute_clusters(self):
         # Compute embeddings
         feed_dict = {
-            self.nodes_ph: self.nodes
+            self.nodes_ph: np.array(self.graph.nodes())
         }
         node_embeddings, edge_embeddings = self.model.inference(feed_dict)
         # clustered_graph = cluster_edges(self.graph, edge_embeddings, params['num_clusters'])
