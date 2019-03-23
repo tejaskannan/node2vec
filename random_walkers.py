@@ -125,12 +125,12 @@ class Struc2VecWalker(RandomWalker):
     def _create_kth_degree_neighborhoods(self, graph):
         # Construct kth-order neighborhoods
         neighborhoods = {
-            node: {0: list(graph.neighbors(node))} for node in graph.nodes()
+            node: {0: set(graph.neighbors(node))} for node in graph.nodes()
         }
         for k in range(1, self.k_max + 1):
             for node in graph.nodes():
                 prev = neighborhoods[node][k-1]
-                neighbors = set()
+                neighbors = prev.copy()
                 for n in prev:
                     neighbors.update(set(graph.neighbors(n)))
 
@@ -143,7 +143,6 @@ class Struc2VecWalker(RandomWalker):
         for k in range(0, self.k_max + 1):
             for node in graph.nodes():
                 degree_neighborhoods[node][k] = compressed_degree_list(graph, neighborhoods[node][k])
-        print('Created Degree neighborhoods')
         return degree_neighborhoods
 
     # O(n^2) algorithm to compute the weights for level k
@@ -154,13 +153,14 @@ class Struc2VecWalker(RandomWalker):
             w = [self._compute_weight(u, v, degree_neighborhoods, k, prev_layer_weights) \
                  for v in graph.nodes()]
             w = np.exp(w)
+
+            # Prevent moving back to the same node
+            w[u] = 0.0
             
             # Normalize the weights
-            total_weight = np.sum(w)
-            w = w / (total_weight + SMALL_NUMBER)
-
-            if abs(np.sum(w) - 1.0) > 1e-3:
-                print(np.sum(w))
+            t = np.sum(w)
+            total_weight += t
+            w = w / t
 
             weights.append(w)
 
@@ -171,5 +171,5 @@ class Struc2VecWalker(RandomWalker):
         if u == v:
             return 0.0
         distance, _ = fastdtw(degree_neighborhoods[u][k], degree_neighborhoods[v][k], dist=dist)
-        f_k = prev_layer_weights[u, v] + distance if prev_layer_weights is not None else 0.0
+        f_k = prev_layer_weights[u, v] + distance if prev_layer_weights is not None else distance
         return -f_k
