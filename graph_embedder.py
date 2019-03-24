@@ -128,11 +128,13 @@ class GraphEmbedder:
             self.nodes_ph: np.array(self.graph.nodes())
         }
         node_embeddings, edge_embeddings = self.model.inference(feed_dict)
-        # clustered_graph = cluster_edges(self.graph, edge_embeddings, params['num_clusters'])
+        clustered_graph = cluster_edges(self.graph, edge_embeddings, self.params['num_clusters'])
         clustered_graph = cluster_nodes(self.graph, node_embeddings, self.params['num_clusters'])
 
-        output_file = self.output_folder + self.params['graph_name'] + '.png'
-        plot_graph(clustered_graph, self.params['num_clusters'], output_file)
+        # Visualization using GraphViz is best for smaller graphs (<50 nodes)
+        if self.params['visualize']:
+            output_file = self.output_folder + self.params['graph_name'] + '.png'
+            plot_graph(clustered_graph, self.params['num_clusters'], output_file)
 
         # Write output graph to Graph XML
         output_file = self.output_folder + self.params['graph_name'] + '.gexf'
