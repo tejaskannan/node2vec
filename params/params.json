@@ -15,6 +15,7 @@
     "walk_length": 80,
     "window_size": 5,
     "walker_options": {
-        "q": 0.3
+        "q": 0.3,
+        "n_comparisons": 5
     }
 }

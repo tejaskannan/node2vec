@@ -26,7 +26,7 @@ def main():
     
     # Load graph
     # graph = load_to_networkx(graph_path)
-    graph = nx.lollipop_graph(10, 10)
+    graph = nx.barbell_graph(10, 10)
 
     # Train and test the embedding model
     embedder = GraphEmbedder(graph, params)

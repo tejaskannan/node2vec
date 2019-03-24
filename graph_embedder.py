@@ -106,7 +106,6 @@ class GraphEmbedder:
             self.nodes_ph: np.array(self.graph.nodes())
         }
         node_embeddings, edge_embeddings = self.model.inference(feed_dict)
-        print(node_embeddings)
         # clustered_graph = cluster_edges(self.graph, edge_embeddings, params['num_clusters'])
         clustered_graph = cluster_nodes(self.graph, node_embeddings, self.params['num_clusters'])
 

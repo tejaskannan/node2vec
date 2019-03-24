@@ -108,3 +108,12 @@ def compressed_degree_list(graph, nodes):
             degree_dict[deg] = 0
         degree_dict[deg] += 1
     return sorted([(d, count) for d, count in degree_dict.items()], key=lambda t: t[0])
+
+
+def avg_2d_array(arr):
+    s = 0.0
+    count = 0.0
+    for a in arr:
+        s += np.sum(a)
+        count += len(a)
+    return s / count
