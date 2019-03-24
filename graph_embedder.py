@@ -6,7 +6,7 @@ from os import mkdir
 from embedding_model import EmbeddingModel
 from random_walkers import RandomWalkerFactory
 from utils import create_mini_batches, append_to_log, create_walk_windows
-from utils import cluster_nodes, cluster_edges
+from utils import cluster_nodes, cluster_edges, create_negative_samples
 from plot import plot_graph
 from constants import *
 
@@ -31,9 +31,14 @@ class GraphEmbedder:
         # Create and initialize embedding model
         self.model = EmbeddingModel(params=params)
         self.nodes_ph = self.model.create_placeholder(dtype=tf.int32, shape=[None], name='nodes-ph')
-        self.walks_ph = self.model.create_placeholder(dtype=tf.int32, shape=[None, params['window_size']-1],
+        self.walks_ph = self.model.create_placeholder(dtype=tf.int32, shape=[None, params['window_size']],
                                                       name='walks-ph')
-        self.model.build(nodes=self.nodes_ph, walks=self.walks_ph, num_nodes=graph.number_of_nodes())
+        self.neg_samples_ph = self.model.create_placeholder(dtype=tf.int32, shape=[None, params['neg_samples']],
+                                                            name='neg-sample-ph')
+        self.model.build(nodes=self.nodes_ph,
+                         walks=self.walks_ph,
+                         neg_samples=self.neg_samples_ph,
+                         num_nodes=graph.number_of_nodes())
         self.model.init()
 
         # Make output folder for this model
@@ -47,23 +52,32 @@ class GraphEmbedder:
         append_to_log(['Epoch', 'Average Loss per Sample'], log_path)
 
         data_windows = create_walk_windows(walks=self.walks, window_size=self.params['window_size'])
-        print(len(data_windows[WALKS]))
+        
+        graph_nodes = list(self.graph.nodes())
+
         convergence_count = 0
         prev_loss = BIG_NUMBER
         for epoch in range(self.params['epochs']):
 
             # Create data batches
+            neg_samples = create_negative_samples(nodes=graph_nodes,
+                                                  walk_windows=data_windows[WALKS],
+                                                  node_windows=data_windows[NODES],
+                                                  num_neg_samples=self.params['neg_samples'])
             batches = create_mini_batches(walks=data_windows[WALKS],
                                           nodes=data_windows[NODES],
+                                          neg_samples=neg_samples,
                                           batch_size=self.params['batch_size'])
             walk_batches = batches[WALKS]
             node_batches = batches[NODES]
+            neg_sample_batches = batches[NEG_SAMPLES]
 
             losses = []
-            for walk_batch, node_batch in zip(walk_batches, node_batches):
+            for walk_batch, node_batch, neg_sample_batch in zip(walk_batches, node_batches, neg_sample_batches):
                 feed_dict = {
                     self.nodes_ph: node_batch,
-                    self.walks_ph: walk_batch
+                    self.walks_ph: walk_batch,
+                    self.neg_samples_ph: neg_sample_batch
                 }
                 loss = self.model.run_train_step(feed_dict)
                 losses.append(loss / float(len(walk_batch)))

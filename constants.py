@@ -3,3 +3,4 @@ BIG_NUMBER = 1e9
 
 WALKS = 'walks'
 NODES = 'nodes'
+NEG_SAMPLES = 'neg_samples'

@@ -89,10 +89,13 @@ class Struc2VecWalker(RandomWalker):
         degree_neighborhoods = {node: {} for node in graph.nodes()}
         self._add_kth_degree_neighborhood(graph, degree_neighborhoods, neighborhoods, 0)
 
-        # Initialize 0th level weights
-        l0_weight, l0_avg = self._compute_weights(graph, degree_neighborhoods, 0, None)
-        weights = [l0_weight]
-        avg_weights = [l0_avg]
+        # Initialize 0th level distances and weights
+        l0_dist = self._compute_distances(graph, degree_neighborhoods, 0, None)
+        distances = [l0_dist]
+
+        l0_weights = self._compute_weights(graph, l0_dist)
+        weights = [l0_weights]
+        avg_weights = [np.average(l0_weights)]
 
         nodes_lst = list(graph.nodes())
         walks = []
@@ -126,9 +129,13 @@ class Struc2VecWalker(RandomWalker):
                         if len(weights) <= k:
                             self._add_kth_neighborhood(graph, neighborhoods, k)
                             self._add_kth_degree_neighborhood(graph, degree_neighborhoods, neighborhoods, k)
-                            lk_weights, avg = self._compute_weights(graph, degree_neighborhoods, k, weights[k-1])
+                            
+                            lk_dist = self._compute_distances(graph, degree_neighborhoods, k, distances[k-1])
+                            lk_weights = self._compute_weights(graph, lk_dist)
+
+                            distances.append(lk_dist)
                             weights.append(lk_weights)
-                            avg_weights.append(avg)
+                            avg_weights.append(np.average(lk_weights))
 
                 walks.append(walk)
         return np.array(walks)
@@ -149,32 +156,32 @@ class Struc2VecWalker(RandomWalker):
         return degree_neighborhoods
 
     # O(n^2) algorithm to compute the weights for level k
-    def _compute_weights(self, graph, degree_neighborhoods, k, prev_layer_weights):
-        weights = []
-        total_weight = 0.0
+    def _compute_distances(self, graph, degree_neighborhoods, k, prev_layer_distances):
+        distances = []
         for u in graph.nodes():
-            w = [self._compute_weight(u, v, degree_neighborhoods, k, prev_layer_weights) \
+            d = [self._compute_distance(u, v, degree_neighborhoods, k, prev_layer_distances) \
                  for v in graph.nodes()]
-            w = np.exp(w)
+            distances.append(d)
 
-            # Prevent moving back to the same node
-            w[u] = 0.0
-            
-            # Normalize the weights
-            t = np.sum(w)
-            if t < SMALL_NUMBER:
-                w[u] = 1.0
-            else:
-                w = w / t
+        return np.array(distances)
 
-            total_weight += t
-            weights.append(w)
-
-        return np.array(weights), np.average(weights)
-
-    def _compute_weight(self, u, v, degree_neighborhoods, k, prev_layer_weights):
+    def _compute_distance(self, u, v, degree_neighborhoods, k, prev_layer_distances):
         if u == v:
             return 0.0
         distance, _ = fastdtw(degree_neighborhoods[u][k], degree_neighborhoods[v][k], dist=dist)
-        f_k = prev_layer_weights[u, v] + distance if prev_layer_weights is not None else distance
-        return -f_k
+        f_k = prev_layer_distances[u, v] + distance if prev_layer_distances is not None else distance
+        return f_k
+
+    def _compute_weights(self, graph, distances):
+        return [self._compute_weight(distances, n) for n in graph.nodes()]
+
+    def _compute_weight(self, distances, u):
+        distances = distances[u]
+        distances[u] = 0.0  # Prevent moving back to the same node
+        weights = np.exp(-distances)
+        s = np.sum(weights)
+        if s < SMALL_NUMBER:
+            weights[u] = 1.0
+        else:
+            weights = weights / s
+        return np.array(weights)

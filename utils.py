@@ -6,20 +6,23 @@ from constants import *
 from sklearn.cluster import KMeans
 
 
-def create_mini_batches(walks, nodes, batch_size):
+def create_mini_batches(walks, nodes, neg_samples, batch_size):
     # Randomly shuffle data points
-    combined = list(zip(walks, nodes))
+    combined = list(zip(walks, nodes, neg_samples))
     np.random.shuffle(combined)
-    walks, nodes = zip(*combined)
+    walks, nodes, neg_samples = zip(*combined)
 
     walks_batches = []
     nodes_batches = []
+    neg_sample_batches = []
     for i in range(0, len(walks), batch_size):
         walks_batches.append(np.array(walks[i:i+batch_size]))
         nodes_batches.append(np.array(nodes[i:i+batch_size]))
+        neg_sample_batches.append(np.array(neg_samples[i:i+batch_size]))
     return {
         WALKS: np.array(walks_batches),
-        NODES: np.array(nodes_batches)
+        NODES: np.array(nodes_batches),
+        NEG_SAMPLES: np.array(neg_sample_batches)
     }
 
 
@@ -27,14 +30,30 @@ def create_walk_windows(walks, window_size):
     walk_windows = []
     node_windows = []
     for walk in walks:
-        for i in range(len(walk) - window_size):
-            window = walk[i:i+window_size]
+        for i in range(len(walk) - window_size - 1):
+            window = walk[i:i+window_size+1]
             walk_windows.append(window[1:])
             node_windows.append(window[0])
     return {
         WALKS: np.array(walk_windows),
         NODES: np.array(node_windows)
     }
+
+
+def create_negative_samples(nodes, walk_windows, node_windows, num_neg_samples):
+    neg_samples = []
+    for n, walk_window in zip(node_windows, walk_windows):
+        w = set(walk_window)
+        neg_sample = set()
+
+        # Create negative samples outside of the current context
+        while len(neg_sample) < num_neg_samples:
+            u = np.random.choice(nodes)
+            if (u != n) and (not u in w):
+                neg_sample.add(u)
+
+        neg_samples.append(list(neg_sample))
+    return np.array(neg_samples)
 
 
 def load_params(params_file_path):

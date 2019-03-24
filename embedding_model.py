@@ -17,6 +17,9 @@ class EmbeddingModel(Model):
         # Walks is a placeholder holding the set of walks (B x L)
         walks = kwargs['walks']
 
+        # Tensor denoting nodes used for negative sampling (B x S)
+        neg_samples = kwargs['neg_samples']
+
         # Number of nodes in the graph
         num_nodes = kwargs['num_nodes']
 
@@ -34,6 +37,11 @@ class EmbeddingModel(Model):
                 walk_embeddings = tf.nn.embedding_lookup(node_embedding_var, walks, name='node-embeddings',
                                                          max_norm=1.0)
 
+                # Tensor Dims: B x S x D
+                neg_sample_embeddings = tf.nn.embedding_lookup(node_embedding_var, neg_samples,
+                                                               name='node-embeddings',
+                                                               max_norm=1.0)
+
                 # Tensor Dims: B x L x D
                 node_shape = tf.shape(node_embeddings)
                 node_expanded = tf.reshape(node_embeddings, [node_shape[0], 1, node_shape[1]])
@@ -42,13 +50,13 @@ class EmbeddingModel(Model):
                 # Tensor Dims: B x 1
                 neighborhood_sum = tf.reduce_sum(walk_multiply, axis=[1, 2])
 
+                # Tensor Dims: B x S
+                neg_sample_similarity = tf.reduce_sum(node_expanded * neg_sample_embeddings, axis=2)
+                neg_sample_sum = tf.reduce_sum(tf.exp(neg_sample_similarity), axis=1)
+
                 # Tensor Dims: B x B x D
                 edge_embeddings = node_expanded * tf.transpose(node_expanded, perm=[1, 0, 2])
 
-                # Tensor Dims: B x 1
-                node_dot_prod = tf.exp(tf.reduce_sum(edge_embeddings, axis=2))
-                all_nodes = tf.reduce_sum(node_dot_prod, axis=1)
-
-                self.loss_op = tf.reduce_sum(tf.log(all_nodes) - neighborhood_sum)
+                self.loss_op = tf.reduce_sum(tf.log(neg_sample_sum) - neighborhood_sum)
                 self.output_ops.append(node_embeddings)
                 self.output_ops.append(edge_embeddings)
