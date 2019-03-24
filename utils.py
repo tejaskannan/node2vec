@@ -95,6 +95,26 @@ def append_to_log(row, log_path):
         csv_writer.writerow(row)
 
 
+def append_lines_to_file(lines, file_path):
+    with open(file_path, 'a') as file:
+        for line in lines:
+            file.write(line.strip() + '\n')
+
+
+def load_data_file(file_path):
+    dataset = []
+    with open(file_path, 'r') as file:
+        for line in file:
+            line = line.strip()
+            elems = line.split()
+            if len(elems) > 1:
+                data = [int(n) for n in elems]
+            else:
+                data = int(elems[0])
+            dataset.append(data)
+    return dataset
+
+
 def dist(a, b):
     degree_dist = (float(max(a[0], b[0])) / (min(a[0], b[0]) + SMALL_NUMBER)) - 1
     return degree_dist * max(a[1], b[1])
@@ -117,3 +137,8 @@ def avg_2d_array(arr):
         s += np.sum(a)
         count += len(a)
     return s / count
+
+
+def lst_elems_to_str(lst):
+    return [str(x) for x in lst]
+

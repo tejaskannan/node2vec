@@ -7,6 +7,7 @@ from embedding_model import EmbeddingModel
 from random_walkers import RandomWalkerFactory
 from utils import create_mini_batches, append_to_log, create_walk_windows
 from utils import cluster_nodes, cluster_edges, create_negative_samples
+from utils import append_lines_to_file, load_data_file, lst_elems_to_str
 from plot import plot_graph
 from constants import *
 
@@ -16,17 +17,6 @@ class GraphEmbedder:
     def __init__(self, graph, params):
         self.graph = graph
         self.params = params
-
-        # Create the random walker for this instance
-        random_walker = RandomWalkerFactory.get_random_walker(name=params['walker_type'],
-                                                          options=params['walker_options'])
-        if random_walker == None:
-            raise ValueError('Could not find the random walker named {0}.'.format(params['walker_type']))
-
-        # Execute random walks
-        self.walks = random_walker.generate_walks(graph=graph,
-                                                  walk_length=params['walk_length'],
-                                                  num_walks=params['num_walks'])
 
         # Create and initialize embedding model
         self.model = EmbeddingModel(params=params)
@@ -46,13 +36,42 @@ class GraphEmbedder:
         self.output_folder = params['output_folder'] + params['graph_name'] + '-' + timestamp + '/'
         mkdir(self.output_folder)
 
+    def generate_walks(self):
+        # Create the random walker for this instance
+        random_walker = RandomWalkerFactory.get_random_walker(name=self.params['walker_type'],
+                                                              options=self.params['walker_options'])
+        if random_walker == None:
+            raise ValueError('Could not find the random walker named {0}.'.format(params['walker_type']))
+
+        walks_file = self.params['data_folder'] + '/walks.txt'
+        nodes_file = self.params['data_folder'] + '/nodes.txt'
+
+        # Execute random walks
+        walks = random_walker.generate_walks(graph=self.graph,
+                                             walk_length=self.params['walk_length'],
+                                             num_walks=self.params['num_walks'])
+
+        data_windows = create_walk_windows(walks=walks, window_size=self.params['window_size'])
+        for i in range(0, len(data_windows[WALKS]), WRITE_AMOUNT):
+            walk_window = [' '.join(lst_elems_to_str(w)) for w in data_windows[WALKS][i:i+WRITE_AMOUNT]]
+            node_window = [str(n) for n in data_windows[NODES][i:i+WRITE_AMOUNT]]
+
+            append_lines_to_file(walk_window, walks_file)
+            append_lines_to_file(node_window, nodes_file)
+
     def train(self):
+
+        # Load input dataset
+        data_windows = {
+            WALKS: load_data_file(self.params['data_folder'] + '/walks.txt'),
+            NODES: load_data_file(self.params['data_folder'] + '/nodes.txt')
+        }
+
         # Append heading to the log file
         log_path = self.output_folder + 'log.csv'
         append_to_log(['Epoch', 'Average Loss per Sample'], log_path)
-
-        data_windows = create_walk_windows(walks=self.walks, window_size=self.params['window_size'])
         
+        # Get a list of the graph nodes for negative sampling
         graph_nodes = list(self.graph.nodes())
 
         convergence_count = 0
@@ -82,20 +101,23 @@ class GraphEmbedder:
                 loss = self.model.run_train_step(feed_dict)
                 losses.append(loss / float(len(walk_batch)))
 
+            # Compute average losses and output to log file
             avg_loss = np.average(losses)
             print('Average loss for epoch {0}: {1}'.format(epoch, avg_loss))
 
             append_to_log([epoch, avg_loss], log_path)
 
+            # Early stopping
             if abs(prev_loss - avg_loss) < SMALL_NUMBER or prev_loss < avg_loss:
                 convergence_count += 1
             else:
                 convergence_count = 0
 
-            prev_loss = avg_loss
             if convergence_count == self.params['patience']:
                 print('Early Stopping.')
                 break
+
+            prev_loss = avg_loss
 
         # Save Model
         self.model.save(self.output_folder)
