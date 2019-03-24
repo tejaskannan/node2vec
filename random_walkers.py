@@ -12,8 +12,9 @@ class RandomWalkerFactory:
             assert 'p' in options and 'q' in options, 'Must specify both p and q.'
             return Node2VecWalker(p=options['p'], q=options['q'])
         if name == 'struc2vec':
-            assert 'q' in options and 'k_max' in options, 'Must specify both q and k_max'
-            return Struc2VecWalker(q=options['q'], k_max=options['k_max'])
+            assert 'q' in options
+            k_max = options['k_max'] if 'k_max' in options else -1
+            return Struc2VecWalker(q=options['q'], k_max=k_max)
         return None
 
 
@@ -74,13 +75,21 @@ class Struc2VecWalker(RandomWalker):
 
     def __init__(self, q, k_max):
         super(Struc2VecWalker, self).__init__()
-        assert k_max > 1, 'k_max must be greater than 1'
         self.q = q
         self.k_max = k_max
 
     def generate_walks(self, graph, walk_length, num_walks):
 
-        degree_neighborhoods = self._create_kth_degree_neighborhoods(graph)
+        # Vertices which are direct neighbros of each node
+        neighborhoods = {
+            node: {0: set(graph.neighbors(node))} for node in graph.nodes()
+        }
+
+        # Create degree lists for the 0th level
+        degree_neighborhoods = {node: {} for node in graph.nodes()}
+        self._add_kth_degree_neighborhood(graph, degree_neighborhoods, neighborhoods, 0)
+
+        # Initialize 0th level weights
         l0_weight, l0_avg = self._compute_weights(graph, degree_neighborhoods, 0, None)
         weights = [l0_weight]
         avg_weights = [l0_avg]
@@ -95,12 +104,12 @@ class Struc2VecWalker(RandomWalker):
                 while len(walk) < walk_length:
                     should_stay = np.random.random() < self.q
                     if should_stay:
-                        v = np.random.choice(nodes_lst, p=weights[k][u])
-                        walk.append(v)
+                        u = np.random.choice(nodes_lst, p=weights[k][u])
+                        walk.append(u)
                     else:
                         if k == 0:
                             k += 1
-                        elif k == self.k_max:
+                        elif self.k_max != -1 and k == self.k_max:
                             k -= 1
                         else:
                             gamma = np.sum([int(weights[k][u][v] > avg_weights[k]) for v in graph.nodes()])
@@ -113,36 +122,33 @@ class Struc2VecWalker(RandomWalker):
                             else:
                                 k -= 1
 
-                        # Only compute a layers weights when the layer is reached
+                        # Only compute a layer's weights when the layer is reached
                         if len(weights) <= k:
+                            self._add_kth_neighborhood(graph, neighborhoods, k)
+                            self._add_kth_degree_neighborhood(graph, degree_neighborhoods, neighborhoods, k)
                             lk_weights, avg = self._compute_weights(graph, degree_neighborhoods, k, weights[k-1])
                             weights.append(lk_weights)
                             avg_weights.append(avg)
+
                 walks.append(walk)
         return np.array(walks)
 
-    # O(nk) procedure to fetch the compressed degree lists for each node at each level
-    def _create_kth_degree_neighborhoods(self, graph):
-        # Construct kth-order neighborhoods
-        neighborhoods = {
-            node: {0: set(graph.neighbors(node))} for node in graph.nodes()
-        }
-        for k in range(1, self.k_max + 1):
-            for node in graph.nodes():
-                prev = neighborhoods[node][k-1]
-                neighbors = prev.copy()
-                for n in prev:
-                    neighbors.update(set(graph.neighbors(n)))
 
-                if node in neighbors:
-                    neighbors.remove(node)
+    def _add_kth_neighborhood(self, graph, neighborhoods, k):
+        for node in graph.nodes():
+            prev = neighborhoods[node][k-1]
+            neighbors = prev.copy()
+            for n in prev:
+                neighbors.update(set(graph.neighbors(n)))
 
-                neighborhoods[node][k] = neighbors
+            if node in neighbors:
+                neighbors.remove(node)
 
-        degree_neighborhoods = {node: {} for node in graph.nodes()}
-        for k in range(0, self.k_max + 1):
-            for node in graph.nodes():
-                degree_neighborhoods[node][k] = compressed_degree_list(graph, neighborhoods[node][k])
+            neighborhoods[node][k] = neighbors
+
+    def _add_kth_degree_neighborhood(self, graph, degree_neighborhoods, neighborhoods, k):
+        for node in graph.nodes():
+            degree_neighborhoods[node][k] = compressed_degree_list(graph, neighborhoods[node][k])
         return degree_neighborhoods
 
     # O(n^2) algorithm to compute the weights for level k
@@ -159,13 +165,15 @@ class Struc2VecWalker(RandomWalker):
             
             # Normalize the weights
             t = np.sum(w)
-            total_weight += t
-            w = w / t
+            if t < SMALL_NUMBER:
+                w[u] = 1.0
+            else:
+                w = w / t
 
+            total_weight += t
             weights.append(w)
 
-        num_edges = pow(graph.number_of_nodes(), 2)
-        return np.array(weights), (total_weight / num_edges)
+        return np.array(weights), np.average(weights)
 
     def _compute_weight(self, u, v, degree_neighborhoods, k, prev_layer_weights):
         if u == v:

@@ -27,7 +27,7 @@ class GraphEmbedder:
         self.walks = random_walker.generate_walks(graph=graph,
                                                   walk_length=params['walk_length'],
                                                   num_walks=params['num_walks'])
-
+        
         # Create and initialize embedding model
         self.model = EmbeddingModel(params=params)
         self.nodes_ph = self.model.create_placeholder(dtype=tf.int32, shape=[None], name='nodes-ph')
@@ -87,6 +87,7 @@ class GraphEmbedder:
             self.nodes_ph: np.array(self.graph.nodes())
         }
         node_embeddings, edge_embeddings = self.model.inference(feed_dict)
+        print(node_embeddings)
         # clustered_graph = cluster_edges(self.graph, edge_embeddings, params['num_clusters'])
         clustered_graph = cluster_nodes(self.graph, node_embeddings, self.params['num_clusters'])
 

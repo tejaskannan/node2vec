@@ -31,7 +31,7 @@ class EmbeddingModel(Model):
                                                          max_norm=1.0)
 
                 # Tensor Dims: B x L x D
-                walk_embeddings = tf.nn.embedding_lookup(node_embedding_var, walks, name='walk-embeddings',
+                walk_embeddings = tf.nn.embedding_lookup(node_embedding_var, walks, name='node-embeddings',
                                                          max_norm=1.0)
 
                 # Tensor Dims: B x L x D
