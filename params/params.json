@@ -2,18 +2,19 @@
     "learning_rate": 0.001,
     "gradient_clip": 1,
     "batch_size": 16,
-    "epochs": 1000,
+    "epochs": 50,
     "threshold": 1e-5,
-    "patience": 10,
-    "embedding_size": 2,
+    "patience": 5,
+    "embedding_size": 4,
     "output_folder": "trained_models/",
     "graph_name": "sioux-falls",
-    "num_clusters": 3,
+    "num_clusters": 4,
     "walker_type": "struc2vec",
-    "num_walks": 10,
+    "num_walks": 20,
     "walk_length": 10,
+    "window_size": 5,
     "walker_options": {
         "k_max": 10,
-        "q": 0.95
+        "q": 0.9
     }
 }

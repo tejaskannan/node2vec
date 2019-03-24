@@ -82,7 +82,7 @@ class Struc2VecWalker(RandomWalker):
 
         # Vertices which are direct neighbros of each node
         neighborhoods = {
-            node: {0: set(graph.neighbors(node))} for node in graph.nodes()
+            node: {0: set([node])} for node in graph.nodes()
         }
 
         # Create degree lists for the 0th level
@@ -140,9 +140,6 @@ class Struc2VecWalker(RandomWalker):
             neighbors = prev.copy()
             for n in prev:
                 neighbors.update(set(graph.neighbors(n)))
-
-            if node in neighbors:
-                neighbors.remove(node)
 
             neighborhoods[node][k] = neighbors
 

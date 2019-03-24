@@ -5,7 +5,7 @@ from datetime import datetime
 from os import mkdir
 from embedding_model import EmbeddingModel
 from random_walkers import RandomWalkerFactory
-from utils import create_mini_batches, append_to_log
+from utils import create_mini_batches, append_to_log, create_walk_windows
 from utils import cluster_nodes, cluster_edges
 from plot import plot_graph
 from constants import *
@@ -27,11 +27,11 @@ class GraphEmbedder:
         self.walks = random_walker.generate_walks(graph=graph,
                                                   walk_length=params['walk_length'],
                                                   num_walks=params['num_walks'])
-        
+
         # Create and initialize embedding model
         self.model = EmbeddingModel(params=params)
         self.nodes_ph = self.model.create_placeholder(dtype=tf.int32, shape=[None], name='nodes-ph')
-        self.walks_ph = self.model.create_placeholder(dtype=tf.int32, shape=[None, params['walk_length']],
+        self.walks_ph = self.model.create_placeholder(dtype=tf.int32, shape=[None, params['window_size']-1],
                                                       name='walks-ph')
         self.model.build(nodes=self.nodes_ph, walks=self.walks_ph, num_nodes=graph.number_of_nodes())
         self.model.init()
@@ -46,12 +46,15 @@ class GraphEmbedder:
         log_path = self.output_folder + 'log.csv'
         append_to_log(['Epoch', 'Average Loss per Sample'], log_path)
 
+        data_windows = create_walk_windows(walks=self.walks, window_size=self.params['window_size'])
+        print(len(data_windows[WALKS]))
         convergence_count = 0
         prev_loss = BIG_NUMBER
         for epoch in range(self.params['epochs']):
 
             # Create data batches
-            batches = create_mini_batches(walks=self.walks,
+            batches = create_mini_batches(walks=data_windows[WALKS],
+                                          nodes=data_windows[NODES],
                                           batch_size=self.params['batch_size'])
             walk_batches = batches[WALKS]
             node_batches = batches[NODES]
@@ -70,8 +73,10 @@ class GraphEmbedder:
 
             append_to_log([epoch, avg_loss], log_path)
 
-            if abs(prev_loss - avg_loss) < SMALL_NUMBER:
+            if abs(prev_loss - avg_loss) < SMALL_NUMBER or prev_loss < avg_loss:
                 convergence_count += 1
+            else:
+                convergence_count = 0
 
             prev_loss = avg_loss
             if convergence_count == self.params['patience']:

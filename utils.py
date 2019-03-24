@@ -6,19 +6,34 @@ from constants import *
 from sklearn.cluster import KMeans
 
 
-def create_mini_batches(walks, batch_size):
-
+def create_mini_batches(walks, nodes, batch_size):
     # Randomly shuffle data points
-    np.random.shuffle(walks)
+    combined = list(zip(walks, nodes))
+    np.random.shuffle(combined)
+    walks, nodes = zip(*combined)
 
     walks_batches = []
     nodes_batches = []
     for i in range(0, len(walks), batch_size):
         walks_batches.append(np.array(walks[i:i+batch_size]))
-        nodes_batches.append(np.array([w[0] for w in walks[i:i+batch_size]]))
+        nodes_batches.append(np.array(nodes[i:i+batch_size]))
     return {
         WALKS: np.array(walks_batches),
         NODES: np.array(nodes_batches)
+    }
+
+
+def create_walk_windows(walks, window_size):
+    walk_windows = []
+    node_windows = []
+    for walk in walks:
+        for i in range(len(walk) - window_size):
+            window = walk[i:i+window_size]
+            walk_windows.append(window[1:])
+            node_windows.append(window[0])
+    return {
+        WALKS: np.array(walk_windows),
+        NODES: np.array(node_windows)
     }
 
 
@@ -73,4 +88,4 @@ def compressed_degree_list(graph, nodes):
         if not deg in degree_dict:
             degree_dict[deg] = 0
         degree_dict[deg] += 1
-    return [(d, count) for d, count in degree_dict.items()]
+    return sorted([(d, count) for d, count in degree_dict.items()], key=lambda t: t[0])
