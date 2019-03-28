@@ -3,6 +3,7 @@ import numpy as np
 from constants import *
 from fastdtw import fastdtw
 from utils import dist, compressed_degree_list, avg_2d_array
+from utils import neg_softmax
 
 
 class RandomWalkerFactory:
@@ -16,6 +17,10 @@ class RandomWalkerFactory:
             k_max = options['k_max'] if 'k_max' in options else -1
             n_comparisons = options['n_comparisons'] if 'n_comparisons' in options else -1
             return Struc2VecWalker(q=options['q'], k_max=k_max, n_comp=n_comparisons)
+        if name == 'edge2vec':
+            assert 'q' in options
+            field = options['field'] if 'field' in options else 'weight'
+            return Edge2VecWalker(q=options['q'], field=field)
         return None
 
 
@@ -208,3 +213,103 @@ class Struc2VecWalker(RandomWalker):
             cluster.remove(n)
             degree_clusters[n] = cluster
         return degree_clusters
+
+
+class Edge2VecWalker(RandomWalker):
+
+    def __init__(self, q, field):
+        super(Edge2VecWalker, self).__init__()
+        self.q = q
+        self.field = field
+
+    def generate_walks(self, graph, walk_length, num_walks):
+        clusters = self._create_clusters(graph)
+
+        neighborhoods = [self._create_neighborhoods(graph, prev_level=None)]
+        edge_features = self._get_edge_features(graph)
+        distances = [self._compute_distances(graph, clusters, neighborhoods[0], edge_features, None)]
+
+        walks = []
+        for _ in range(num_walks):
+            for edge in graph.edges():
+                walk = [edge]
+                k = 0
+                e = edge
+                while len(walk) < walk_length:
+                    should_stay = np.random.random() < self.q
+                    if not should_stay:
+                        should_move_up = np.random.random() < 0.5
+                        if should_move_up or k == 0:
+                            k += 1
+                        else:
+                            k -= 1
+
+                        if len(neighborhoods) >= k:
+                            kth_neighborhood = self._create_neighborhoods(graph, neighborhoods[k-1])
+                            neighborhoods.append(kth_neighborhood)
+
+                            kth_distances = self._compute_distances(graph=graph,
+                                                                    clusters=clusters,
+                                                                    neighborhoods=kth_neighborhood,
+                                                                    features=edge_features,
+                                                                    prev_layer_distances=distances[k-1])
+                            distances.append(kth_distances)
+                    else:
+                        weights = neg_softmax(distances[k][e])
+                        next_edge_index = np.random.choice(len(clusters[e]), p=weights)
+                        e = clusters[e][next_edge_index]
+                        walk.append(e)
+                walks.append(walk)
+        return walks
+
+    def _create_clusters(self, graph):
+        clusters = {}
+        edge_list = list(graph.edges())
+        for e in graph.edges():
+            clusters[e] = edge_list
+        return clusters
+
+    def _create_neighborhoods(self, graph, prev_level):
+        neighborhoods = {}
+        for e in graph.edges():
+            prev = prev_level[e] if prev_level != None else [e]
+            neighborhood = set()
+            for src, dest in prev:
+                for n in graph.neighbors(src):
+                    neighborhood.add((src, n))
+                for n in graph.neighbors(dest):
+                    neighborhood.add((dest, n))
+            neighborhoods[e] = neighborhood
+        return neighborhoods
+
+    def _get_edge_features(self, graph):
+        features = {}
+        for src, dest in graph.edges():
+            # Excludes the current edge
+            src_deg = graph.degree(src) - 1
+            dest_deg = graph.degree(dest) - 1
+
+            weight = graph[src][dest][self.field] if self.field in graph[src][dest] else 1
+            features[(src, dest)] = np.array([src_deg+dest_deg, weight])
+        return features
+
+    def _get_features_for_neighborhood(self, neighborhood, features):
+        neigh_features = [features[edge] for edge in neighborhood]
+        return list(sorted(neigh_features, key=lambda t: t[0]))
+
+    def _compute_distances(self, graph, clusters, neighborhoods, features, prev_layer_distances):
+        distances = {}
+        for edge in graph.edges():
+            edge_dist = {}
+            edge_features = self._get_features_for_neighborhood(neighborhoods[edge], features)
+            for e in clusters[edge]:
+                e_features = self._get_features_for_neighborhood(neighborhoods[e], features)
+                prev_layer_dist = prev_layer_distances[edge][e] if prev_layer_distances != None else 0
+                edge_dist[e] = self._compute_distance(edge_features, e_features, prev_layer_dist)
+            distances[edge] = edge_dist
+        return distances
+
+    def _compute_distance(self, nf1, nf2, prev_layer_distance):
+        dtw_dist = fastdtw(nf1, nf2, dist=lambda x,y: np.linalg.norm(x - y))
+        return prev_layer_distance + dtw_dist[0]
+

@@ -6,54 +6,62 @@ from constants import *
 from sklearn.cluster import KMeans
 
 
-def create_mini_batches(walks, nodes, neg_samples, batch_size):
+def create_mini_batches(walks, points, neg_samples, batch_size):
     # Randomly shuffle data points
-    combined = list(zip(walks, nodes, neg_samples))
+    combined = list(zip(walks, points, neg_samples))
     np.random.shuffle(combined)
-    walks, nodes, neg_samples = zip(*combined)
+    walks, points, neg_samples = zip(*combined)
 
     walks_batches = []
-    nodes_batches = []
+    points_batches = []
     neg_sample_batches = []
     for i in range(0, len(walks), batch_size):
         walks_batches.append(np.array(walks[i:i+batch_size]))
-        nodes_batches.append(np.array(nodes[i:i+batch_size]))
+        points_batches.append(np.array(points[i:i+batch_size]))
         neg_sample_batches.append(np.array(neg_samples[i:i+batch_size]))
     return {
         WALKS: np.array(walks_batches),
-        NODES: np.array(nodes_batches),
+        POINTS: np.array(points_batches),
         NEG_SAMPLES: np.array(neg_sample_batches)
     }
 
 
 def create_walk_windows(walks, window_size):
     walk_windows = []
-    node_windows = []
+    point_windows = []
     for walk in walks:
-        for i in range(len(walk) - window_size - 1):
+        for i in range(len(walk) - window_size):
             window = walk[i:i+window_size+1]
             walk_windows.append(window[1:])
-            node_windows.append(window[0])
+            point_windows.append(window[0])
     return {
         WALKS: np.array(walk_windows),
-        NODES: np.array(node_windows)
+        POINTS: np.array(point_windows)
     }
 
 
-def create_negative_samples(nodes, walk_windows, node_windows, num_neg_samples):
+def create_negative_samples(points, walk_windows, point_windows, num_neg_samples, graph, use_edges):
+    if use_edges:
+        index = edge_index(graph)
+        points = [index[p] for p in points]
+
     neg_samples = []
-    for n, walk_window in zip(node_windows, walk_windows):
+    for n, walk_window in zip(point_windows, walk_windows):
         w = set(walk_window)
         neg_sample = set()
 
         # Create negative samples outside of the current context
         while len(neg_sample) < num_neg_samples:
-            u = np.random.choice(nodes)
+            u = np.random.choice(points)
             if (u != n) and (not u in w):
                 neg_sample.add(u)
 
         neg_samples.append(list(neg_sample))
     return np.array(neg_samples)
+
+
+def edge_index(graph):
+    return {edge: i for i, edge in enumerate(graph.edges())}
 
 
 def load_params(params_file_path):
@@ -63,17 +71,8 @@ def load_params(params_file_path):
 
 
 def cluster_edges(graph, edge_embeddings, num_clusters):
-    edge_emb_vectors = []
-    for i in range(edge_embeddings.shape[0]):
-        for j in range(edge_embeddings.shape[1]):
-            if i in graph and j in graph[i]:
-                vector = edge_embeddings[i, j]
-                edge_emb_vectors.append(vector)
-    edge_emb_vectors = np.array(edge_emb_vectors)
-
-    kmeans = KMeans(n_clusters=num_clusters, random_state=0, max_iter=1000).fit(edge_emb_vectors)
+    kmeans = KMeans(n_clusters=num_clusters, random_state=0, max_iter=1000).fit(edge_embeddings)
     edge_labels = kmeans.labels_
-
     graph = graph.copy()
     for label, (u, v) in zip(edge_labels, graph.edges()):
         graph.add_edge(u, v, cluster=int(label))
@@ -101,16 +100,27 @@ def append_lines_to_file(lines, file_path):
             file.write(line.strip() + '\n')
 
 
-def load_data_file(file_path):
+def load_data_file(file_path, graph, use_edges=False):
+    if use_edges:
+        index = edge_index(graph)
+
     dataset = []
     with open(file_path, 'r') as file:
         for line in file:
             line = line.strip()
             elems = line.split()
-            if len(elems) > 1:
-                data = [int(n) for n in elems]
+            if use_edges:
+                if len(elems) > 1:
+                    data = [e.split('-') for e in elems]
+                    data = [index[(int(e[0]), int(e[1]))] for e in data]
+                else:
+                    tokens = elems[0].split('-')
+                    data = index[(int(tokens[0]), int(tokens[1]))]
             else:
-                data = int(elems[0])
+                if len(elems) > 1:
+                    data = [int(n) for n in elems]
+                else:
+                    data = int(elems[0])
             dataset.append(data)
     return dataset
 
@@ -142,3 +152,13 @@ def avg_2d_array(arr):
 def lst_elems_to_str(lst):
     return [str(x) for x in lst]
 
+
+def lst_pairs_to_str(lst):
+    return [str(x[0]) + '-' + str(x[1]) for x in lst]
+
+
+def neg_softmax(edge_dict):
+    arr = [-dist for dist in edge_dict.values()]
+    max_elem = np.max(arr)
+    exp_arr = np.exp(arr - max_elem)
+    return exp_arr / np.sum(exp_arr)
